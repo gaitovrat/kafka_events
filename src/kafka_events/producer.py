@@ -25,5 +25,5 @@ def produce_event(name: str):
         'sleep': randint(1, 10)
     }
 
-    producer.produce(name, 'function', json.dumps(data))
+    producer.produce(name, key='function', value=json.dumps(data))
     producer.flush()
