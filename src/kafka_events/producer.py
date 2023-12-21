@@ -5,6 +5,7 @@ from random import randint
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 
+from .db import Event
 
 load_dotenv()
 
@@ -20,10 +21,17 @@ CONFIG = {
 producer = Producer(CONFIG)
 
 
-def produce_event(name: str):
+def produce_event() -> Event | None:
+    event = Event.create('function')
+    if not event:
+        return None
+
     data = {
+        'event_id': event.id,
         'sleep': randint(1, 10)
     }
 
-    producer.produce(name, key='function', value=json.dumps(data))
+    producer.produce('example', key='function', value=json.dumps(data))
     producer.flush()
+
+    return event

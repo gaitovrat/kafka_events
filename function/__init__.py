@@ -1,9 +1,9 @@
+import asyncio
 import os
-import json
 
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer
 from dotenv import load_dotenv
-
+from kafka_events.db import Event, EventStatus
 
 load_dotenv()
 
@@ -17,20 +17,25 @@ CONFIG = {
     'group.id': 'kafka-events-consumer',
     'auto.offset.reset': 'earliest'
 }
+MAX_TASKS = 10
 
 
-def start(event: dict):
+async def start(body: dict):
+    print(body)
+    event_id = body["event_id"]
+    event = Event.update(event_id, EventStatus.IN_PROGRESS)
+    print(event)
+
+    asyncio.sleep(body["sleep"])
+
+    event = Event.update(event_id, EventStatus.COMPLETED)
     print(event)
 
 
-def main():
-    with open(f"{PATH}/config.json") as fd:
-        config = json.load(fd)
-    if 'topic' not in config:
-        raise ValueError('Topic is not specified in config.json')
-
-    topic = config['topic']
+async def main():
+    topic = "example"
     consumer = Consumer(CONFIG)
+    tasks = []
 
     consumer.subscribe([topic])
     print(f'Subscribed on topic "{topic}"')
@@ -45,8 +50,11 @@ def main():
         if error:
             print(error)
         else:
-            start(msg.value().decode('utf-8'))
+            task = asyncio.create_task(start(msg.value().decode('utf-8')))
+            tasks.append(task)
 
+        if len(tasks) == MAX_TASKS:
+            await asyncio.wait(tasks)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
