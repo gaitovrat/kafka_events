@@ -1,15 +1,20 @@
 import asyncio
+import aiohttp
 import os
+import json
 
 from confluent_kafka import Consumer
 from dotenv import load_dotenv
-from kafka_events.db import Event, EventStatus
+from kafka_events.db import EventStatus
 
 load_dotenv()
 
 KAFKA_ADDRESS = os.environ.get('KAFKA_ADDRESS')
 if not KAFKA_ADDRESS:
     raise OSError('KAFKA_ADDRESS is not set')
+FLASK_PORT = os.environ.get('FLASK_PORT')
+if not FLASK_PORT:
+    raise OSError('FLASK_PORT is not set')
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 CONFIG = {
@@ -17,23 +22,35 @@ CONFIG = {
     'group.id': 'kafka-events-consumer',
     'auto.offset.reset': 'earliest'
 }
-MAX_TASKS = 10
+HOST = f'http://127.0.0.1:{FLASK_PORT}'
+
+tasks = []
 
 
 async def start(body: dict):
     print(body)
-    event_id = body["event_id"]
-    event = Event.update(event_id, EventStatus.IN_PROGRESS)
-    print(event)
+    event_id = body['event_id']
 
-    asyncio.sleep(body["sleep"])
+    async with aiohttp.ClientSession() as session:
+        async with session.put(f'{HOST}/event/{event_id}/{EventStatus.IN_PROGRESS.value}') as response:
+            print(await response.json())
 
-    event = Event.update(event_id, EventStatus.COMPLETED)
-    print(event)
+        await asyncio.sleep(body['sleep'])
+
+        async with session.put(f'{HOST}/event/{event_id}/{EventStatus.COMPLETED.value}') as response:
+            print(await response.json())
 
 
-async def main():
-    topic = "example"
+async def consume():
+    while True:
+        if tasks:
+            await asyncio.wait(tasks)
+
+        await asyncio.sleep(1)
+
+
+async def produce():
+    topic = 'example'
     consumer = Consumer(CONFIG)
     tasks = []
 
@@ -41,20 +58,28 @@ async def main():
     print(f'Subscribed on topic "{topic}"')
 
     while True:
-        msg = consumer.poll(1.0)
+        msg = consumer.poll(1)
+        print(msg)
 
         if not msg:
+            await asyncio.sleep(1)
             continue
 
         error = msg.error()
         if error:
             print(error)
         else:
-            task = asyncio.create_task(start(msg.value().decode('utf-8')))
+            body = msg.value().decode('utf-8')
+            task = asyncio.create_task(start(json.loads(body)))
             tasks.append(task)
 
-        if len(tasks) == MAX_TASKS:
-            await asyncio.wait(tasks)
+        await asyncio.sleep(1)
+
+
+async def main():
+    task1 = asyncio.create_task(produce())
+    task2 = asyncio.create_task(consume())
+    await asyncio.gather(task1, task2)
 
 if __name__ == '__main__':
     asyncio.run(main())

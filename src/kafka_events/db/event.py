@@ -9,7 +9,7 @@ from .base import Base
 
 class EventStatus(Enum):
     QUEUED = 'Queued'
-    IN_PROGRESS = 'In progress'
+    IN_PROGRESS = 'InProgress'
     COMPLETED = 'Completed'
 
 
@@ -58,7 +58,7 @@ class Event(Base):
         if not event:
             return None
 
-        event.status = status
+        event.status = status.value
         try:
             session.commit()
             return event

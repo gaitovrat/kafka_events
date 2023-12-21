@@ -1,5 +1,6 @@
 from flask import Flask, Response, abort
 from flask.json import jsonify
+from flask_cors import CORS
 
 from .producer import produce_event
 from .db import Event, EventStatus
@@ -19,8 +20,11 @@ def create_event() -> Response:
 
 @app.get('/event')
 def get_events() -> Response:
-    events = Event.all()
-    return jsonify(response=[event.to_dict() for event in events])
+    try:
+        events = Event.all()
+        return jsonify(response=[event.to_dict() for event in events])
+    except Exception:
+        return jsonify(response=[])
 
 
 @app.get('/event/<int:event_id>')
@@ -35,7 +39,7 @@ def get_event(event_id: int) -> Response:
 @app.put('/event/<int:event_id>/<string:status_name>')
 def update_event(event_id: int, status_name: str) -> Response:
     statuses = list(EventStatus)
-    statuses = [status for status in statuses if status.name == status_name]
+    statuses = [status for status in statuses if status.value == status_name]
     if not statuses:
         abort(400)
 
@@ -44,3 +48,6 @@ def update_event(event_id: int, status_name: str) -> Response:
         abort(404)
 
     return jsonify(response=event.to_dict())
+
+
+CORS(app)
